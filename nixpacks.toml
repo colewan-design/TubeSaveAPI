@@ -1,13 +1,13 @@
 [phases.setup]
-nixPkgs = ["php82", "php82Extensions.pdo", "php82Extensions.pdo_sqlite", "php82Extensions.mbstring", "php82Extensions.xml", "php82Extensions.curl", "php82Extensions.zip", "php82Extensions.gd", "composer", "python310", "ffmpeg"]
+nixPkgs = ["ffmpeg"]
 
 [phases.install]
 cmds = ["composer install --no-dev --optimize-autoloader"]
 
 [phases.build]
 cmds = [
-  "php artisan key:generate --force",
   "touch database/database.sqlite",
+  "php artisan key:generate --force",
   "php artisan migrate --force"
 ]
 
