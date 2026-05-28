@@ -6,10 +6,11 @@ cmds = ["composer install --no-dev --optimize-autoloader"]
 
 [phases.build]
 cmds = [
+  "cp .env.example .env",
   "touch database/database.sqlite",
   "php artisan key:generate --force",
   "php artisan migrate --force"
 ]
 
 [start]
-cmd = "php artisan serve --host=0.0.0.0 --port=$PORT"
+cmd = "php artisan config:cache && php artisan route:cache && php artisan serve --host=0.0.0.0 --port=$PORT"
