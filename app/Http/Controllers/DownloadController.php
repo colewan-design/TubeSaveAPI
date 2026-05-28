@@ -14,9 +14,14 @@ class DownloadController extends Controller
 
     public function __construct()
     {
-        $this->isWindows   = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        $binaryName        = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp';
-        $this->ytDlpPath   = storage_path('app/' . $binaryName);
+        $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+
+        // On Linux shared hosting, /home is often noexec — use /tmp instead
+        $binaryName      = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp_linux';
+        $this->ytDlpPath = $this->isWindows
+            ? storage_path('app/' . $binaryName)
+            : '/tmp/' . $binaryName;
+
         $this->downloadDir = storage_path('app/downloads');
 
         if (!is_dir($this->downloadDir)) {
