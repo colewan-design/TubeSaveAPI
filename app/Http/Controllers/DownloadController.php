@@ -159,7 +159,9 @@ class DownloadController extends Controller
             stream_context_create(['http' => ['header' => "User-Agent: TubeSaveApi\r\n"]])
         ), true);
 
-        $assetName   = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+        // yt-dlp_linux is the standalone binary (bundles Python 3.10+)
+        // yt-dlp (no suffix) is a Python script that requires system Python 3.10+
+        $assetName   = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp_linux';
         $downloadUrl = null;
 
         foreach ($releases['assets'] ?? [] as $asset) {
