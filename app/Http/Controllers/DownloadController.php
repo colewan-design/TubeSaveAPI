@@ -10,10 +10,13 @@ class DownloadController extends Controller
 {
     private string $ytDlpPath;
     private string $downloadDir;
+    private bool $isWindows;
 
     public function __construct()
     {
-        $this->ytDlpPath  = storage_path('app/yt-dlp.exe');
+        $this->isWindows   = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $binaryName        = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+        $this->ytDlpPath   = storage_path('app/' . $binaryName);
         $this->downloadDir = storage_path('app/downloads');
 
         if (!is_dir($this->downloadDir)) {
@@ -33,7 +36,7 @@ class DownloadController extends Controller
 
         $output = [];
         $code   = 0;
-        exec('"' . $this->ytDlpPath . '" --dump-json --no-playlist ' . escapeshellarg($url) . ' 2>&1', $output, $code);
+        exec($this->quote($this->ytDlpPath) . ' --dump-json --no-playlist ' . escapeshellarg($url) . ' 2>&1', $output, $code);
 
         if ($code !== 0) {
             return response()->json(['error' => implode("\n", $output)], 500);
@@ -45,7 +48,7 @@ class DownloadController extends Controller
         }
 
         return response()->json([
-            'title'     => $info['title']    ?? 'Unknown',
+            'title'     => $info['title']     ?? 'Unknown',
             'thumbnail' => $info['thumbnail'] ?? null,
             'duration'  => $info['duration']  ?? null,
             'uploader'  => $info['uploader']  ?? null,
@@ -66,9 +69,8 @@ class DownloadController extends Controller
 
             $this->ensureYtDlp();
 
-            // Fetch title for filename
             $output = [];
-            exec('"' . $this->ytDlpPath . '" --dump-json --no-playlist ' . escapeshellarg($url) . ' 2>&1', $output);
+            exec($this->quote($this->ytDlpPath) . ' --dump-json --no-playlist ' . escapeshellarg($url) . ' 2>&1', $output);
             $info      = json_decode(implode('', $output), true);
             $title     = $info['title'] ?? 'download';
             $safeTitle = preg_replace('/[\\\\\\/:*?"<>|]/', '_', $title);
@@ -84,7 +86,7 @@ class DownloadController extends Controller
                 $args = '-f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"';
             }
 
-            $cmd     = '"' . $this->ytDlpPath . '" ' . $args . ' --no-playlist --newline -o ' . escapeshellarg($outputFile) . ' ' . escapeshellarg($url) . ' 2>&1';
+            $cmd     = $this->quote($this->ytDlpPath) . ' ' . $args . ' --no-playlist --newline -o ' . escapeshellarg($outputFile) . ' ' . escapeshellarg($url) . ' 2>&1';
             $process = popen($cmd, 'r');
 
             if (!$process) {
@@ -104,18 +106,17 @@ class DownloadController extends Controller
             pclose($process);
 
             if (file_exists($outputFile)) {
-                $basename = basename($outputFile);
                 $this->sseEvent([
                     'type'     => 'done',
-                    'file'     => $basename,
+                    'file'     => basename($outputFile),
                     'filename' => $safeTitle . '.' . $ext,
                 ]);
             } else {
                 $this->sseEvent(['type' => 'error', 'message' => 'Output file not found after download']);
             }
         }, 200, [
-            'Content-Type'  => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
+            'Content-Type'      => 'text/event-stream',
+            'Cache-Control'     => 'no-cache',
             'X-Accel-Buffering' => 'no',
         ]);
     }
@@ -136,6 +137,11 @@ class DownloadController extends Controller
             ->deleteFileAfterSend(true);
     }
 
+    private function quote(string $path): string
+    {
+        return $this->isWindows ? '"' . $path . '"' : escapeshellarg($path);
+    }
+
     private function sseEvent(array $data): void
     {
         echo 'data: ' . json_encode($data) . "\n\n";
@@ -153,18 +159,24 @@ class DownloadController extends Controller
             stream_context_create(['http' => ['header' => "User-Agent: TubeSaveApi\r\n"]])
         ), true);
 
+        $assetName   = $this->isWindows ? 'yt-dlp.exe' : 'yt-dlp';
         $downloadUrl = null;
+
         foreach ($releases['assets'] ?? [] as $asset) {
-            if ($asset['name'] === 'yt-dlp.exe') {
+            if ($asset['name'] === $assetName) {
                 $downloadUrl = $asset['browser_download_url'];
                 break;
             }
         }
 
         if (!$downloadUrl) {
-            throw new \RuntimeException('Could not find yt-dlp.exe release');
+            throw new \RuntimeException('Could not find ' . $assetName . ' in latest release');
         }
 
         file_put_contents($this->ytDlpPath, file_get_contents($downloadUrl));
+
+        if (!$this->isWindows) {
+            chmod($this->ytDlpPath, 0755);
+        }
     }
 }
